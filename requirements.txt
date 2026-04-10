@@ -47,3 +47,7 @@ tenacity==8.2.3
 # TEMPLATES (for email HTML if needed)
 # ============================================
 jinja2==3.1.3
+
+# Add these lines to your existing requirements.txt
+boto3>=1.34.0
+botocore>=1.34.0

@@ -1,21 +1,33 @@
 {
   "completed_searches": [
+    "carpentry contractor|Toronto ON",
+    "custom cabinets|Toronto ON",
+    "bathroom remodeling|Toronto ON",
+    "custom woodworking|Toronto ON",
+    "carpentry services|Toronto ON",
+    "finish carpentry|Toronto ON",
     "carpentry|Toronto ON",
     "carpenter|Toronto ON",
-    "carpentry contractor|Toronto ON",
+    "kitchen cabinets|Toronto ON",
+    "wood shop|Toronto ON",
+    "renovation contractor|Toronto ON",
+    "framing contractor|Toronto ON",
+    "millwork|Toronto ON",
     "cabinetmaker|Toronto ON",
-    "custom cabinets|Toronto ON",
-    "carpentry services|Toronto ON",
+    "woodworking|Toronto ON",
+    "trim carpentry|Toronto ON",
+    "kitchen remodeling|Toronto ON",
+    "home remodeling|Toronto ON",
     "cabinet maker|Toronto ON"
   ],
-  "current_search_index": 6,
+  "current_search_index": 18,
   "total_searches": 684,
-  "last_updated": "2026-04-10T10:12:40.541785",
-  "total_leads_collected": 84,
+  "last_updated": "2026-04-10T13:44:47.891428",
+  "total_leads_collected": 125,
   "active_session_file": "data/session_20260410_094709.json",
   "email_stats": {
-    "verified": 84,
-    "unverified": 40,
+    "verified": 127,
+    "unverified": 70,
     "none": 0
   }
 }
