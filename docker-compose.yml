@@ -1,0 +1,123 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: ./Dockerfile.api
+    container_name: cali_api
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8002:8000"
+    volumes:
+      - ./data:/app/data
+      - ./agent_config.yaml:/app/agent_config.yaml
+    env_file:
+      - .env
+    environment:
+      - AGENT_ENABLED=true
+      - AGENT_CHECK_INTERVAL=5
+    depends_on:
+      - redis
+      - ollama
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: ./Dockerfile.worker
+    container_name: cali_worker
+    command: celery -A app.worker.celery_app worker --loglevel=info --queues=emails,agent,replies
+    volumes:
+      - ./data:/app/data
+      - ./agent_config.yaml:/app/agent_config.yaml
+      - /var/run/docker.sock:/var/run/docker.sock
+    env_file:
+      - .env
+    environment:
+      - AGENT_ENABLED=true
+    depends_on:
+      - redis
+      - ollama
+    restart: unless-stopped
+
+  beat:
+    build:
+      context: .
+      dockerfile: ./Dockerfile.worker
+    container_name: cali_beat
+    command: celery -A app.worker.celery_app beat --loglevel=info
+    volumes:
+      - ./data:/app/data
+      - ./agent_config.yaml:/app/agent_config.yaml
+    env_file:
+      - .env
+    environment:
+      - AGENT_ENABLED=true
+    depends_on:
+      - redis
+      - api
+    restart: unless-stopped
+
+  redis:
+    image: redis:7
+    container_name: cali_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama
+    container_name: cali_ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama:/root/.ollama
+    restart: unless-stopped
+    command: ["serve"]
+
+  lead-scraper:
+    build:
+      context: .
+      dockerfile: Dockerfile.scraper
+    container_name: cali_lead-scraper
+    command: python lead_scraper/continuous_scraper.py
+    volumes:
+      - ./lead_scraper:/app/lead_scraper
+      - ./data:/app/data
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - AUTO_PUSH_TO_QUEUE=true
+    depends_on:
+      - redis
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  auto-import:
+    build:
+      context: .
+      dockerfile: ./Dockerfile.api
+    container_name: cali_auto-import
+    volumes:
+      - ./data:/app/data
+      - ./wait_for_api.py:/app/wait_for_api.py
+      - ./auto_import_scraped_leads.py:/app/auto_import_scraped_leads.py
+    env_file:
+      - .env
+    depends_on:
+      - api
+      - redis
+    command: >
+      sh -lc "python /app/wait_for_api.py &&
+              echo '🤖 Starting auto-import of scraped leads...' &&
+              python /app/auto_import_scraped_leads.py &&
+              echo '✅ Auto-import complete! Container will exit.'"
+    restart: "no"
+
+volumes:
+  ollama:
+  redis-data:

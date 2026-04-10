@@ -1,0 +1,1469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Autonomics - Wood Campaign Manager</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #8B4513 0%, #D2691E 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1800px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            color: #8B4513;
+            font-size: 32px;
+            margin-bottom: 5px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 16px;
+        }
+
+        .quick-links {
+            display: flex;
+            gap: 10px;
+        }
+
+        .quick-link {
+            padding: 10px 20px;
+            background: #8B4513;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .quick-link:hover {
+            background: #A0522D;
+            transform: translateY(-2px);
+        }
+
+        .template-info {
+            background: linear-gradient(135deg, #8B4513 0%, #D2691E 100%);
+            padding: 30px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+            color: white;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            text-align: center;
+        }
+        
+        .template-info h2 {
+            color: white;
+            margin: 0 0 15px 0;
+            font-size: 28px;
+        }
+        
+        .template-info p {
+            font-size: 18px;
+            margin: 5px 0;
+        }
+
+        .agent-control {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+
+        .agent-control h2 {
+            color: #8B4513;
+            margin: 0 0 20px 0;
+            font-size: 24px;
+        }
+
+        .agent-status {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+
+        .agent-status-badge {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .status-indicator {
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        .status-indicator.running {
+            background: #4caf50;
+        }
+
+        .status-indicator.stopped {
+            background: #f44336;
+        }
+
+        .status-indicator.paused {
+            background: #ff9800;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .agent-controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .agent-btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .agent-btn.start {
+            background: #4caf50;
+            color: white;
+        }
+
+        .agent-btn.stop {
+            background: #f44336;
+            color: white;
+        }
+
+        .agent-btn.pause {
+            background: #ff9800;
+            color: white;
+        }
+
+        .agent-btn.resume {
+            background: #2196f3;
+            color: white;
+        }
+
+        .agent-btn.run-now {
+            background: #9c27b0;
+            color: white;
+        }
+
+        .agent-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .agent-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .agent-metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .metric {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+        }
+
+        .metric-label {
+            color: #999;
+            font-size: 12px;
+            margin-bottom: 5px;
+        }
+
+        .metric-value {
+            color: #333;
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-card h3 {
+            color: #999;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+
+        .stat-card .value {
+            color: #8B4513;
+            font-size: 36px;
+            font-weight: bold;
+        }
+
+        .tabs {
+            background: white;
+            border-radius: 15px;
+            padding: 0;
+            overflow: hidden;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+
+        .tab-buttons {
+            display: flex;
+            background: #f8f9fa;
+            border-bottom: 2px solid #e9ecef;
+            overflow-x: auto;
+        }
+
+        .tab-button {
+            flex: 1;
+            min-width: 150px;
+            padding: 20px;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            color: #666;
+            transition: all 0.3s;
+            white-space: nowrap;
+        }
+
+        .tab-button.active {
+            background: white;
+            color: #8B4513;
+            border-bottom: 3px solid #8B4513;
+        }
+
+        .tab-content {
+            display: none;
+            padding: 30px;
+            max-height: 800px;
+            overflow-y: auto;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .btn {
+            background: #8B4513;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn:hover {
+            background: #A0522D;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(139, 69, 19, 0.3);
+        }
+
+        .btn-danger {
+            background: #f44336;
+        }
+
+        .btn-danger:hover {
+            background: #d32f2f;
+        }
+
+        .btn-success {
+            background: #4caf50;
+        }
+
+        .btn-success:hover {
+            background: #388e3c;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            background: #f8f9fa;
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+            color: #666;
+            border-bottom: 2px solid #e9ecef;
+        }
+
+        td {
+            padding: 15px;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        tr:hover {
+            background: #fff5f0;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .status-new { background: #e3f2fd; color: #1976d2; }
+        .status-contacted { background: #fff3e0; color: #f57c00; }
+        .status-replied { background: #e8f5e9; color: #388e3c; }
+        .status-interested { background: #c8e6c9; color: #2e7d32; }
+        .status-follow_up { background: #fff9c4; color: #f57f17; }
+
+        .upload-zone {
+            border: 3px dashed #8B4513;
+            border-radius: 12px;
+            padding: 60px 40px;
+            text-align: center;
+            background: linear-gradient(135deg, #8B451310 0%, #D2691E10 100%);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 20px;
+        }
+
+        .upload-zone:hover {
+            border-color: #D2691E;
+            background: linear-gradient(135deg, #8B451320 0%, #D2691E20 100%);
+        }
+
+        .upload-zone.dragging {
+            border-color: #D2691E;
+            background: linear-gradient(135deg, #8B451330 0%, #D2691E30 100%);
+        }
+
+        #upload-progress {
+            background: #f3f4f6;
+            border-radius: 8px;
+            height: 8px;
+            overflow: hidden;
+            margin: 20px 0;
+            display: none;
+        }
+
+        #progress-bar {
+            background: linear-gradient(90deg, #8B4513 0%, #D2691E 100%);
+            height: 100%;
+            width: 0%;
+            transition: width 0.3s;
+        }
+
+        .result-box {
+            padding: 24px;
+            border-radius: 12px;
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .result-success {
+            background: linear-gradient(135deg, #10b98120 0%, #05966920 100%);
+            border: 2px solid #10b981;
+        }
+
+        .result-error {
+            background: linear-gradient(135deg, #ef444420 0%, #dc262620 100%);
+            border: 2px solid #ef4444;
+        }
+
+        .analytics-card {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+
+        .analytics-card h3 {
+            color: #8B4513;
+            margin-bottom: 15px;
+        }
+
+        .analytics-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .analytics-row:last-child {
+            border-bottom: none;
+        }
+
+        .queue-item {
+            background: white;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 10px;
+        }
+
+        .queue-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .badge {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .badge-pending { background: #fff3e0; color: #f57c00; }
+        .badge-sent { background: #e8f5e9; color: #388e3c; }
+        .badge-failed { background: #ffebee; color: #c62828; }
+        .badge-processing { background: #e3f2fd; color: #1976d2; }
+
+        .scraper-config {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 12px;
+            margin: 10px 0;
+            flex-wrap: wrap;
+        }
+
+        .scraper-config label {
+            font-size: 13px;
+            font-weight: 600;
+            color: #8B4513;
+            white-space: nowrap;
+        }
+
+        .scraper-config select, .multiselect-container {
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid #ddd;
+            min-width: 180px;
+            background: white;
+        }
+
+        .multiselect-container {
+            position: relative;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .multiselect-selected {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+            color: #333;
+        }
+
+        .multiselect-list {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            width: 100%;
+            max-height: 250px;
+            overflow-y: auto;
+            background: white;
+            border: 1px solid #ddd;
+            border-top: none;
+            border-radius: 0 0 6px 6px;
+            z-index: 2000;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            padding: 5px 0;
+        }
+
+        .multiselect-list.active {
+            display: block;
+        }
+
+        .multiselect-item {
+            padding: 8px 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 13px;
+            transition: background 0.2s;
+        }
+
+        .multiselect-item:hover {
+            background: #f8f9fa;
+        }
+
+        .multiselect-item input {
+            cursor: pointer;
+        }
+
+        #btn-start-scrape {
+            background: #8B4513;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        #btn-start-scrape:hover {
+            background: #A0522D;
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1>🪵 Advanced Autonomics - Wood Campaign Manager</h1>
+                <p>Autonomous email outreach for woodworking & carpentry industries</p>
+            </div>
+            <div class="quick-links">
+                <a href="/docs" class="quick-link" target="_blank">📚 API Docs</a>
+                <a href="/health/full" class="quick-link" target="_blank">💚 Health</a>
+                <a href="http://localhost:8000/static/monitor.html" class="quick-link" target="_blank">📊 Monitor</a>
+            </div>
+        </div>
+
+        <!-- 🔥 WOOD ONLY TEMPLATE INFO -->
+        <div class="template-info">
+            <h2>🪵 Wood & Carpentry Template</h2>
+            <p>8th Generation Autonomous Woodworking Robots</p>
+            <p style="margin-top: 10px; font-size: 14px; opacity: 0.9;">All leads automatically receive wood-specific content</p>
+            <p style="margin-top: 5px; font-size: 13px; opacity: 0.8;">✅ Agent handles all sending - just start and monitor</p>
+        </div>
+
+        <!-- ✅ AGENT CONTROL WITH RESUME BUTTON -->
+        <div class="agent-control">
+            <h2>🤖 Agent Control Panel</h2>
+            <div class="agent-status">
+                <div class="agent-status-badge">
+                    <div class="status-indicator stopped" id="agent-status-indicator"></div>
+                    <span id="agent-status-text">Agent Stopped</span>
+                </div>
+
+                <div class="scraper-config">
+                    <label>Country</label>
+                    <div class="multiselect-container" onclick="toggleDropdown(event, 'scrape-country-list')">
+                        <div class="multiselect-selected" id="country-selected-text">Select Country... <span>▼</span></div>
+                        <div class="multiselect-list" id="scrape-country-list" onclick="event.stopPropagation()"></div>
+                        <input type="hidden" id="scrape-country" value="">
+                    </div>
+
+                    <label>States</label>
+                    <div class="multiselect-container" onclick="toggleDropdown(event, 'scrape-regions-list')">
+                        <div class="multiselect-selected" id="regions-selected-text">Select States... <span>▼</span></div>
+                        <div class="multiselect-list" id="scrape-regions-list" onclick="event.stopPropagation()"></div>
+                    </div>
+
+                    <button id="btn-start-scrape" onclick="startScrape()">Start Scrape</button>
+                </div>
+
+                <div class="agent-controls">
+                    <button class="agent-btn start" id="btn-start" onclick="startAgent()">▶️ Start</button>
+                    <button class="agent-btn stop" id="btn-stop" onclick="stopAgent()" disabled>⏹️ Stop</button>
+                    <button class="agent-btn pause" id="btn-pause" onclick="pauseAgent()" disabled>⏸️ Pause</button>
+                    <button class="agent-btn resume" id="btn-resume" onclick="resumeAgent()" disabled>▶️ Resume</button>
+                    <button class="agent-btn run-now" id="btn-run-now" onclick="runNow()" disabled>⚡ Run Now</button>
+                </div>
+            </div>
+
+            <div class="agent-metrics">
+                <div class="metric">
+                    <div class="metric-label">Emails Today</div>
+                    <div class="metric-value" id="metric-emails-today">-</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Daily Limit</div>
+                    <div class="metric-value" id="metric-daily-limit">-</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">This Hour</div>
+                    <div class="metric-value" id="metric-hourly">-</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Total Sent</div>
+                    <div class="metric-value" id="metric-total-sent">-</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Success Rate</div>
+                    <div class="metric-value" id="metric-success-rate">-</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Last Run</div>
+                    <div class="metric-value" style="font-size: 14px;" id="metric-last-run">Never</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3>Total Leads</h3>
+                <div class="value" id="stat-total">-</div>
+            </div>
+            <div class="stat-card">
+                <h3>Contacted</h3>
+                <div class="value" id="stat-contacted">-</div>
+            </div>
+            <div class="stat-card">
+                <h3>Replied</h3>
+                <div class="value" id="stat-replied">-</div>
+            </div>
+            <div class="stat-card">
+                <h3>Interested</h3>
+                <div class="value" id="stat-interested">-</div>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <div class="tab-buttons">
+                <button class="tab-button active" onclick="showTab('leads')">👥 Leads</button>
+                <button class="tab-button" onclick="showTab('analytics')">📊 Analytics</button>
+                <button class="tab-button" onclick="showTab('queue')">📧 Email Queue</button>
+                <button class="tab-button" onclick="showTab('replies')">💬 Replies</button>
+                <button class="tab-button" onclick="showTab('logs')">📋 Agent Logs</button>
+                <button class="tab-button" onclick="showTab('health')">💚 System Health</button>
+                <button class="tab-button" onclick="showTab('import')">📤 Import</button>
+            </div>
+
+            <div class="tab-content active" id="tab-leads">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 20px;">
+                    <h2>All Leads</h2>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn" onclick="loadLeads()">🔄 Refresh</button>
+                        <button class="btn btn-danger" onclick="deleteAllLeads()">🗑️ Delete All</button>
+                    </div>
+                </div>
+                <div id="leads-table-container"></div>
+            </div>
+
+            <div class="tab-content" id="tab-analytics">
+                <h2 style="margin-bottom: 20px;">📊 Campaign Analytics</h2>
+                
+                <div class="analytics-card">
+                    <h3>Overview (Last 30 Days)</h3>
+                    <div id="analytics-overview">Loading...</div>
+                </div>
+
+                <div class="analytics-card">
+                    <h3>Performance Metrics (Last 24 Hours)</h3>
+                    <div id="analytics-performance">Loading...</div>
+                </div>
+
+                <div class="analytics-card">
+                    <h3>Top Performing Leads</h3>
+                    <div id="analytics-top-leads">Loading...</div>
+                </div>
+
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button class="btn" onclick="refreshAnalytics()">🔄 Refresh</button>
+                    <button class="btn btn-success" onclick="exportAnalytics()">📥 Export CSV</button>
+                </div>
+            </div>
+
+            <div class="tab-content" id="tab-queue">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 20px;">
+                    <h2>📧 Email Queue</h2>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn" onclick="loadQueueStatus()">🔄 Refresh</button>
+                        <button class="btn btn-danger" onclick="clearFailedQueue()">🗑️ Clear Failed</button>
+                    </div>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <h3>Pending</h3>
+                        <div class="value" id="queue-pending">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Processing</h3>
+                        <div class="value" id="queue-processing">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Sent</h3>
+                        <div class="value" id="queue-sent">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Failed (Retryable)</h3>
+                        <div class="value" id="queue-failed">-</div>
+                    </div>
+                </div>
+
+                <h3 style="margin: 30px 0 15px 0;">Queue Items</h3>
+                <div id="queue-items"></div>
+            </div>
+
+            <div class="tab-content" id="tab-replies">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 20px;">
+                    <h2>💬 Email Replies</h2>
+                    <button class="btn" onclick="loadReplies()">🔄 Refresh</button>
+                </div>
+                <div id="replies-container"></div>
+            </div>
+
+            <div class="tab-content" id="tab-logs">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 20px;">
+                    <h2>📋 Agent Activity Logs</h2>
+                    <button class="btn" onclick="loadAgentLogs()">🔄 Refresh</button>
+                </div>
+                <div id="logs-container"></div>
+            </div>
+
+            <div class="tab-content" id="tab-health">
+                <h2 style="margin-bottom: 20px;">💚 System Health Check</h2>
+                <div id="health-container">
+                    <button class="btn" onclick="loadHealthCheck()">🔍 Run Health Check</button>
+                </div>
+            </div>
+
+            <div class="tab-content" id="tab-import">
+                <h2 style="margin-bottom: 20px;">📤 Import CSV Leads</h2>
+                <p style="color: #666; margin-bottom: 30px;">Upload a CSV file with columns: email, first_name, last_name, company, industry, location</p>
+                
+                <div id="upload-zone" class="upload-zone">
+                    <div style="font-size: 64px; margin-bottom: 20px;">📁</div>
+                    <h3 style="color: #8B4513; margin-bottom: 10px;">Drag & Drop CSV File Here</h3>
+                    <p style="color: #999; margin: 15px 0;">or</p>
+                    <button onclick="document.getElementById('file-input').click()" style="
+                        background: #8B4513;
+                        color: white;
+                        border: none;
+                        padding: 12px 32px;
+                        border-radius: 8px;
+                        font-size: 16px;
+                        font-weight: 600;
+                        cursor: pointer;
+                    ">
+                        Browse Files
+                    </button>
+                    <input type="file" id="file-input" accept=".csv" style="display: none;">
+                    <p style="color: #999; margin-top: 20px; font-size: 14px;">
+                        Maximum file size: 10MB
+                    </p>
+                </div>
+
+                <div id="upload-progress-container" style="display: none;">
+                    <div id="upload-progress"></div>
+                    <div id="progress-bar"></div>
+                    <p id="progress-text" style="text-align: center; color: #666; margin-top: 10px;">Uploading...</p>
+                </div>
+
+                <div id="upload-results"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+        let agentStatus = null;
+
+        // Auto-refresh every 10 seconds
+        setInterval(loadAgentStatus, 10000);
+        loadAgentStatus();
+        loadLeads();
+        loadScraperCountries();
+
+        async function loadAgentStatus() {
+            try {
+                const response = await fetch(`${API_BASE}/agent/status`);
+                const data = await response.json();
+                agentStatus = data;
+                
+    const isRunning = data.agent.is_running;
+                const isPaused = data.agent.is_paused;
+
+                const indicator = document.getElementById('agent-status-indicator');
+                const statusText = document.getElementById('agent-status-text');
+
+                // Update button states based on agent status
+                if (isRunning && !isPaused) {
+                    // Agent is running
+                    indicator.className = 'status-indicator running';
+                    statusText.textContent = 'Agent Running';
+                    document.getElementById('btn-start').disabled = true;
+                    document.getElementById('btn-stop').disabled = false;
+                    document.getElementById('btn-pause').disabled = false;
+                    document.getElementById('btn-resume').disabled = true;
+                    document.getElementById('btn-run-now').disabled = false;
+                } else if (isRunning && isPaused) {
+                    // Agent is paused (running but paused)
+                    indicator.className = 'status-indicator paused';
+                    statusText.textContent = 'Agent Paused';
+                    document.getElementById('btn-start').disabled = true;
+                    document.getElementById('btn-stop').disabled = false;
+                    document.getElementById('btn-pause').disabled = true;
+                    document.getElementById('btn-resume').disabled = false;
+                    document.getElementById('btn-run-now').disabled = true;
+                } else {
+                    // Agent is stopped
+                    indicator.className = 'status-indicator stopped';
+                    statusText.textContent = 'Agent Stopped';
+                    document.getElementById('btn-start').disabled = false;
+                    document.getElementById('btn-stop').disabled = true;
+                    document.getElementById('btn-pause').disabled = true;
+                    document.getElementById('btn-resume').disabled = true;
+                    document.getElementById('btn-run-now').disabled = true;
+                }
+
+                document.getElementById('metric-emails-today').textContent = data.limits.daily.sent;
+                document.getElementById('metric-daily-limit').textContent = data.limits.daily.limit;
+                document.getElementById('metric-hourly').textContent = `${data.limits.hourly.sent}/${data.limits.hourly.limit}`;
+                document.getElementById('metric-total-sent').textContent = data.statistics.total_emails_sent;
+
+                const successRate = data.statistics.total_emails_sent > 0 
+                    ? ((data.statistics.total_emails_sent - data.statistics.total_errors) / data.statistics.total_emails_sent * 100).toFixed(1)
+                    : '0.0';
+                document.getElementById('metric-success-rate').textContent = successRate + '%';
+
+                const lastRun = data.agent.last_run ? new Date(data.agent.last_run).toLocaleTimeString() : 'Never';
+                document.getElementById('metric-last-run').textContent = lastRun;
+
+                document.getElementById('stat-total').textContent = data.leads.total;
+                document.getElementById('stat-contacted').textContent = data.leads.contacted;
+                document.getElementById('stat-replied').textContent = data.leads.replied;
+                document.getElementById('stat-interested').textContent = data.leads.interested || 0;
+
+            } catch (error) {
+                console.error('Error loading agent status:', error);
+            }
+        }
+
+        async function startAgent() {
+            if (!confirm('Start the AI agent? It will automatically send wood emails to qualified leads.')) return;
+            try {
+                const response = await fetch(`${API_BASE}/agent/start`, { method: 'POST' });
+                const result = await response.json();
+                alert('✅ ' + result.message);
+                loadAgentStatus();
+            } catch (error) {
+                alert('❌ Error: ' + error.message);
+            }
+        }
+
+        async function stopAgent() {
+            if (!confirm('Stop the agent completely?')) return;
+            try {
+                const response = await fetch(`${API_BASE}/agent/stop`, { method: 'POST' });
+                const result = await response.json();
+                alert('✅ ' + result.message);
+                loadAgentStatus();
+            } catch (error) {
+                alert('❌ Error: ' + error.message);
+            }
+        }
+
+        async function pauseAgent() {
+            if (!confirm('Pause the agent? You can resume it later.')) return;
+            try {
+                const response = await fetch(`${API_BASE}/agent/pause`, { method: 'POST' });
+                const result = await response.json();
+                alert('✅ Agent paused. Click "Resume" to continue.');
+                loadAgentStatus();
+            } catch (error) {
+                alert('❌ Error: ' + error.message);
+            }
+        }
+
+        async function resumeAgent() {
+            if (!confirm('Resume the agent? It will continue from where it paused.')) return;
+            try {
+                const response = await fetch(`${API_BASE}/agent/resume`, { method: 'POST' });
+                const result = await response.json();
+                alert('✅ ' + result.message);
+                loadAgentStatus();
+            } catch (error) {
+                alert('❌ Error: ' + error.message);
+            }
+        }
+
+        async function runNow() {
+            if (!confirm('Run agent cycle now with WOOD template?\n\nAgent will:\n- Check all leads\n- Send initial emails to new leads\n- Send follow-ups if timing is right\n- Respect all safety rules')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/agent/run-now`, { method: 'POST' });
+                const result = await response.json();
+                
+                alert(`✅ Agent cycle completed!\n\n🪵 Template: WOOD\n\nQueued: ${result.results.emails_queued}\nSkipped: ${result.results.leads_skipped}\nErrors: ${result.results.errors}`);
+                
+                loadAgentStatus();
+                loadAgentLogs();
+                loadQueueStatus();
+                
+            } catch (error) {
+                alert('❌ Error: ' + error.message);
+            }
+        }
+
+        async function loadLeads() {
+            try {
+                const response = await fetch(`${API_BASE}/leads/?limit=100`);
+                const leads = await response.json();
+
+                const container = document.getElementById('leads-table-container');
+                
+                if (leads.length === 0) {
+                    container.innerHTML = '<p style="color: #999; text-align: center; padding: 40px;">No leads found. Import some leads to get started!</p>';
+                    return;
+                }
+
+                let html = '<table><thead><tr><th>Email</th><th>Name</th><th>Company</th><th>Status</th><th>Follow-ups</th></tr></thead><tbody>';
+                
+                leads.forEach(lead => {
+                    html += `
+                        <tr>
+                            <td>${lead.email}</td>
+                            <td>${lead.first_name || ''} ${lead.last_name || ''}</td>
+                            <td>${lead.company || '-'}</td>
+                            <td><span class="status-badge status-${lead.status}">${lead.status}</span></td>
+                            <td>${lead.follow_up_count || 0}/${lead.max_follow_ups || 3}</td>
+                        </tr>
+                    `;
+                });
+                
+                html += '</tbody></table>';
+                container.innerHTML = html;
+
+            } catch (error) {
+                console.error('Error loading leads:', error);
+            }
+        }
+
+        async function loadAnalytics() {
+            try {
+                const overviewRes = await fetch(`${API_BASE}/analytics/overview`);
+                const overview = await overviewRes.json();
+                
+                const overviewContainer = document.getElementById('analytics-overview');
+                overviewContainer.innerHTML = `
+                    <div class="analytics-row">
+                        <span>Response Rate:</span>
+                        <strong>${overview.overview.response_rate}%</strong>
+                    </div>
+                    <div class="analytics-row">
+                        <span>Interest Rate:</span>
+                        <strong>${overview.overview.interested_rate}%</strong>
+                    </div>
+                    <div class="analytics-row">
+                        <span>Total Leads:</span>
+                        <strong>${overview.overview.total_leads}</strong>
+                    </div>
+                    <div class="analytics-row">
+                        <span>Contacted:</span>
+                        <strong>${overview.overview.contacted_leads}</strong>
+                    </div>
+                `;
+
+                const perfRes = await fetch(`${API_BASE}/analytics/performance?hours=24`);
+                const perf = await perfRes.json();
+                
+                const perfContainer = document.getElementById('analytics-performance');
+                perfContainer.innerHTML = `
+                    <div class="analytics-row">
+                        <span>Agent Success Rate:</span>
+                        <strong>${perf.agent.success_rate}%</strong>
+                    </div>
+                    <div class="analytics-row">
+                        <span>Avg Retries Before Success:</span>
+                        <strong>${perf.queue.avg_retries}</strong>
+                    </div>
+                    <div class="analytics-row">
+                        <span>Avg Processing Time:</span>
+                        <strong>${perf.queue.avg_processing_time_minutes} minutes</strong>
+                    </div>
+                `;
+
+                const leadsRes = await fetch(`${API_BASE}/analytics/top-performing-leads?limit=5`);
+                const topLeads = await leadsRes.json();
+                
+                const leadsContainer = document.getElementById('analytics-top-leads');
+                let leadsHtml = '<table><thead><tr><th>Email</th><th>Company</th><th>Status</th><th>Priority</th></tr></thead><tbody>';
+                
+                topLeads.leads.forEach(lead => {
+                    leadsHtml += `
+                        <tr>
+                            <td>${lead.email}</td>
+                            <td>${lead.company || '-'}</td>
+                            <td><span class="status-badge status-${lead.status}">${lead.status}</span></td>
+                            <td>${lead.priority_score.toFixed(1)}</td>
+                        </tr>
+                    `;
+                });
+                
+                leadsHtml += '</tbody></table>';
+                leadsContainer.innerHTML = leadsHtml;
+
+            } catch (error) {
+                console.error('Error loading analytics:', error);
+            }
+        }
+
+        async function refreshAnalytics() {
+            await loadAnalytics();
+        }
+
+        async function exportAnalytics() {
+            window.open(`${API_BASE}/analytics/export/csv`, '_blank');
+        }
+
+        async function loadQueueStatus() {
+            try {
+                const response = await fetch(`${API_BASE}/queue/status`);
+                const data = await response.json();
+
+                document.getElementById('queue-pending').textContent = data.by_status.pending;
+                document.getElementById('queue-processing').textContent = data.by_status.processing;
+                document.getElementById('queue-sent').textContent = data.by_status.sent;
+                document.getElementById('queue-failed').textContent = data.failed_breakdown.can_retry;
+
+                const pendingRes = await fetch(`${API_BASE}/queue/pending?limit=20`);
+                const pending = await pendingRes.json();
+                
+                const container = document.getElementById('queue-items');
+                if (pending.items.length === 0) {
+                    container.innerHTML = '<p style="color: #999; text-align: center;">No items in queue</p>';
+                    return;
+                }
+
+                let html = '';
+                pending.items.forEach(item => {
+                    html += `
+                        <div class="queue-item">
+                            <div class="queue-item-header">
+                                <strong>${item.subject}</strong>
+                                <span class="badge badge-${item.status}">${item.status}</span>
+                            </div>
+                            <div style="font-size: 12px; color: #666;">
+                                Lead ID: ${item.lead_id} | Retry: ${item.retry_count}/3 | Scheduled: ${new Date(item.scheduled_at).toLocaleString()}
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                container.innerHTML = html;
+
+            } catch (error) {
+                console.error('Error loading queue:', error);
+            }
+        }
+
+        async function clearFailedQueue() {
+            if (!confirm('Clear permanently failed emails from queue?')) return;
+            try {
+                const response = await fetch(`${API_BASE}/queue/failed?only_permanent=true`, { method: 'DELETE' });
+                const result = await response.json();
+                alert(`✅ Cleared ${result.deleted} failed emails`);
+                loadQueueStatus();
+            } catch (error) {
+                alert('❌ Error: ' + error.message);
+            }
+        }
+
+        async function loadReplies() {
+            try {
+                const response = await fetch(`${API_BASE}/replies/?limit=50`);
+                const data = await response.json();
+
+                const container = document.getElementById('replies-container');
+                
+                if (data.replies.length === 0) {
+                    container.innerHTML = '<p style="color: #999; text-align: center;">No replies yet</p>';
+                    return;
+                }
+
+                let html = '<table><thead><tr><th>From</th><th>Subject</th><th>Classification</th><th>Matched</th><th>Received</th></tr></thead><tbody>';
+                
+                data.replies.forEach(reply => {
+                    const classificationColor = reply.classification === 'interested' ? 'status-interested' : 
+                                               reply.classification === 'not_interested' ? 'status-new' : 'status-contacted';
+                    
+                    html += `
+                        <tr>
+                            <td>${reply.from_email}</td>
+                            <td>${reply.subject || '(no subject)'}</td>
+                            <td><span class="status-badge ${classificationColor}">${reply.classification || 'unclassified'}</span></td>
+                            <td>${reply.matched ? '✅' : '❌'}</td>
+                            <td>${new Date(reply.received_at).toLocaleString()}</td>
+                        </tr>
+                    `;
+                });
+                
+                html += '</tbody></table>';
+                container.innerHTML = html;
+
+            } catch (error) {
+                console.error('Error loading replies:', error);
+            }
+        }
+
+        async function loadAgentLogs() {
+            try {
+                const response = await fetch(`${API_BASE}/agent/logs?limit=50`);
+                const data = await response.json();
+
+                const container = document.getElementById('logs-container');
+                
+                if (data.logs.length === 0) {
+                    container.innerHTML = '<p style="color: #999; text-align: center;">No logs yet</p>';
+                    return;
+                }
+
+                let html = '<table><thead><tr><th>Time</th><th>Action</th><th>Lead</th><th>Result</th><th>Reason</th></tr></thead><tbody>';
+                
+                data.logs.forEach(log => {
+                    const resultColor = log.action_result === 'success' ? 'status-interested' : 
+                                       log.action_result === 'error' ? 'status-new' : 'status-contacted';
+                    
+                    html += `
+                        <tr>
+                            <td>${new Date(log.timestamp).toLocaleString()}</td>
+                            <td>${log.action_type}</td>
+                            <td>${log.lead_email || '-'}</td>
+                            <td><span class="status-badge ${resultColor}">${log.action_result}</span></td>
+                            <td>${log.decision_reason || '-'}</td>
+                        </tr>
+                    `;
+                });
+                
+                html += '</tbody></table>';
+                container.innerHTML = html;
+
+            } catch (error) {
+                console.error('Error loading logs:', error);
+            }
+        }
+
+        async function loadHealthCheck() {
+            try {
+                const response = await fetch(`${API_BASE}/health/full`);
+                const data = await response.json();
+
+                const container = document.getElementById('health-container');
+                
+                let html = `
+                    <div class="analytics-card">
+                        <h3>Overall Status: ${data.status === 'healthy' ? '✅' : '⚠️'} ${data.overall}</h3>
+                `;
+                
+                for (const [service, check] of Object.entries(data.checks)) {
+                    if (typeof check === 'object' && check.status) {
+                        const icon = check.status === 'healthy' ? '✅' : '❌';
+                        html += `
+                            <div class="analytics-row">
+                                <span>${icon} ${service}</span>
+                                <span>${check.message}</span>
+                            </div>
+                        `;
+                    }
+                }
+                
+                html += '</div>';
+                container.innerHTML = html;
+
+            } catch (error) {
+                console.error('Error loading health check:', error);
+                document.getElementById('health-container').innerHTML = `
+                    <div class="result-box result-error">
+                        <p>Failed to load health check: ${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        async function deleteAllLeads() {
+            if (!confirm('⚠️ DELETE ALL LEADS? This cannot be undone!')) return;
+            if (!confirm('Are you ABSOLUTELY SURE? All lead data will be permanently deleted!')) return;
+            
+            try {
+                const response = await fetch(`${API_BASE}/leads/`, { method: 'DELETE' });
+                
+                if (response.ok) {
+                    alert('✅ All leads deleted successfully!');
+                    loadLeads();
+                    loadAgentStatus();
+                } else {
+                    alert('❌ Error deleting leads');
+                }
+            } catch (error) {
+                alert('❌ Error: ' + error.message);
+            }
+        }
+
+        const uploadZone = document.getElementById('upload-zone');
+        const fileInput = document.getElementById('file-input');
+
+        uploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadZone.classList.add('dragging');
+        });
+
+        uploadZone.addEventListener('dragleave', () => {
+            uploadZone.classList.remove('dragging');
+        });
+
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadZone.classList.remove('dragging');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) handleFile(files[0]);
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) handleFile(e.target.files[0]);
+        });
+
+        async function handleFile(file) {
+            if (!file.name.endsWith('.csv')) {
+                alert('❌ Please upload a CSV file');
+                return;
+            }
+
+            const progressContainer = document.getElementById('upload-progress-container');
+            const progressBar = document.getElementById('progress-bar');
+            const resultsDiv = document.getElementById('upload-results');
+
+            uploadZone.style.display = 'none';
+            progressContainer.style.display = 'block';
+            document.getElementById('upload-progress').style.display = 'block';
+            resultsDiv.innerHTML = '';
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                let progress = 0;
+                const interval = setInterval(() => {
+                    progress += 10;
+                    if (progress <= 90) progressBar.style.width = progress + '%';
+                }, 100);
+
+                const response = await fetch(`${API_BASE}/import/csv`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                clearInterval(interval);
+                progressBar.style.width = '100%';
+
+                const result = await response.json();
+
+                setTimeout(() => {
+                    progressContainer.style.display = 'none';
+                    uploadZone.style.display = 'block';
+
+                    if (result.success) {
+                        resultsDiv.innerHTML = `
+                            <div class="result-box result-success">
+                                <div style="font-size: 48px; margin-bottom: 16px;">✅</div>
+                                <h3 style="color: #059669; margin-bottom: 12px;">Import Successful!</h3>
+                                <p style="font-size: 18px; color: #047857; margin-bottom: 8px;">
+                                    <strong>${result.imported}</strong> leads imported
+                                </p>
+                                ${result.skipped > 0 ? `<p style="color: #6b7280;">${result.skipped} duplicates skipped</p>` : ''}
+                            </div>
+                        `;
+                        loadLeads();
+                        loadAgentStatus();
+                    } else {
+                        resultsDiv.innerHTML = `
+                            <div class="result-box result-error">
+                                <div style="font-size: 48px; margin-bottom: 16px;">❌</div>
+                                <h3 style="color: #dc2626; margin-bottom: 12px;">Import Failed</h3>
+                                <p style="color: #991b1b;">${result.detail || 'Unknown error'}</p>
+                            </div>
+                        `;
+                    }
+                }, 500);
+
+            } catch (error) {
+                progressContainer.style.display = 'none';
+                uploadZone.style.display = 'block';
+                resultsDiv.innerHTML = `
+                    <div class="result-box result-error">
+                        <div style="font-size: 48px; margin-bottom: 16px;">❌</div>
+                        <h3 style="color: #dc2626;">Upload Error</h3>
+                        <p style="color: #991b1b;">${error.message}</p>
+                    </div>
+                `;
+            }
+
+            fileInput.value = '';
+        }
+
+        function showTab(tabName) {
+            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+
+            event.target.classList.add('active');
+            document.getElementById('tab-' + tabName).classList.add('active');
+
+            if (tabName === 'leads') loadLeads();
+            if (tabName === 'analytics') loadAnalytics();
+            if (tabName === 'queue') loadQueueStatus();
+            if (tabName === 'replies') loadReplies();
+            if (tabName === 'logs') loadAgentLogs();
+            if (tabName === 'health') loadHealthCheck();
+        }
+
+        // Location Selector Functions
+        function toggleDropdown(event, id) {
+            event.stopPropagation();
+            const list = document.getElementById(id);
+            const isActive = list.classList.contains('active');
+            
+            // Close all other lists
+            document.querySelectorAll('.multiselect-list').forEach(l => l.classList.remove('active'));
+            
+            if (!isActive) {
+                list.classList.add('active');
+            }
+        }
+
+        // Close dropdowns when clicking outside
+        document.addEventListener('click', () => {
+            document.querySelectorAll('.multiselect-list').forEach(l => l.classList.remove('active'));
+        });
+
+        async function loadScraperCountries() {
+            try {
+                const response = await fetch(`${API_BASE}/scraper/locations/countries`);
+                const countries = await response.json();
+                const list = document.getElementById('scrape-country-list');
+                
+                list.innerHTML = countries.map(c => `
+                    <div class="multiselect-item" onclick="selectCountry('${c.code}', '${c.name}')">
+                        ${c.name}
+                    </div>
+                `).join('');
+            } catch (e) { console.error('Error loading countries:', e); }
+        }
+
+        function selectCountry(code, name) {
+            document.getElementById('scrape-country').value = code;
+            document.getElementById('country-selected-text').innerHTML = `${name} <span>▼</span>`;
+            document.querySelectorAll('.multiselect-list').forEach(l => l.classList.remove('active'));
+            loadScraperRegions();
+        }
+
+        async function loadScraperRegions() {
+            const country = document.getElementById('scrape-country').value;
+            if (!country) return;
+            try {
+                const response = await fetch(`${API_BASE}/scraper/locations/regions?country=${country}`);
+                const regions = await response.json();
+                const list = document.getElementById('scrape-regions-list');
+                
+                list.innerHTML = regions.map(r => `
+                    <div class="multiselect-item">
+                        <input type="checkbox" value="${r.code}" data-name="${r.name}" onchange="updateSelectedText('regions')">
+                        ${r.name}
+                    </div>
+                `).join('');
+                
+                document.getElementById('regions-selected-text').innerHTML = 'Select States... <span>▼</span>';
+            } catch (e) { console.error('Error loading regions:', e); }
+        }
+
+        async function loadScraperCities() {
+            // No longer used in UI, but kept here if needed for backend expansion
+            return;
+        }
+
+        function updateSelectedText(type) {
+            const list = document.getElementById(`scrape-${type}-list`);
+            const selected = Array.from(list.querySelectorAll('input:checked'));
+            const textEl = document.getElementById(`${type}-selected-text`);
+            
+            if (selected.length === 0) {
+                textEl.innerHTML = `Select ${type.charAt(0).toUpperCase() + type.slice(1)}... <span>▼</span>`;
+            } else if (selected.length === 1) {
+                textEl.innerHTML = `${selected[0].getAttribute('data-name')} <span>▼</span>`;
+            } else {
+                textEl.innerHTML = `${selected.length} Selected <span>▼</span>`;
+            }
+
+            // If we just updated regions, refresh cities
+            if (type === 'regions') loadScraperCities();
+        }
+
+        async function startScrape() {
+            const country = document.getElementById('scrape-country').value;
+            const regions = Array.from(document.querySelectorAll('#scrape-regions-list input:checked')).map(i => i.value);
+            
+            if (!country || regions.length === 0) {
+                alert('Please select a country and at least one state.');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/scraper/start`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ country, regions, cities: [] }) // Explicitly pass empty cities to trigger Auto-Saturation
+                });
+                const result = await response.json();
+                alert(`🚀 Scraper started! It will automatically saturate the selected regions.\nConfig: ${result.config_path}`);
+            } catch (e) { 
+                console.error('Error starting scraper:', e);
+                alert('Error starting scraper: ' + e.message); 
+            }
+        }
+    </script>
+</body>
+</html>
