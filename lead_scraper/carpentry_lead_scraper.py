@@ -331,115 +331,50 @@ class CarpentryLeadScraper:
 
     def find_emails_from_website(self, website_url):
         """
-        Scrape a website to find real email addresses.
-
-        Strategy:
-        1. Try homepage with requests (fast)
-        2. Try expanded list of contact page URLs with requests
-        3. If still nothing, use Selenium on homepage + contact page
-           (catches JS-rendered footers like Squarespace/Wix/Webflow)
+        Scrape a website to find real email addresses - REQUESTS ONLY.
         """
         if not website_url:
             return []
 
-        from urllib.parse import urljoin
+        emails = set()
 
         try:
             if not website_url.startswith(('http://', 'https://')):
                 website_url = 'https://' + website_url
 
-            # ── PHASE 1: requests on homepage ────────────────────────────────
-            logger.debug(f"  🏠 Checking homepage (requests)...")
+            logger.debug(f"  🏠 Checking homepage...")
             emails = self._try_scrape_url_requests_only(website_url)
+
             if emails:
                 logger.info(f"  ✅ Found {len(emails)} emails on homepage")
                 return self._rank_emails(list(emails))
 
-            # ── PHASE 2: requests on common contact page paths ───────────────
-            # Expanded list — many Canadian SMB sites use non-standard paths
-            contact_paths = [
+            contact_urls = [
                 '/contact',
                 '/contact.html',
                 '/contact-us',
                 '/contact-us.html',
                 '/contactus',
-                '/contactus.html',
-                '/about',
-                '/about-us',
-                '/about.html',
-                '/about-us.html',
-                '/reach-us',
-                '/get-in-touch',
-                '/info',
-                '/pages/contact',        # Shopify
-                '/pages/contact-us',     # Shopify
-                '/pages/about',          # Shopify
             ]
 
-            for path in contact_paths:
+            from urllib.parse import urljoin
+
+            for path in contact_urls:
                 contact_url = urljoin(website_url, path)
                 logger.debug(f"  🔄 Trying {path}...")
+
                 emails = self._try_scrape_url_requests_only(contact_url)
+
                 if emails:
                     logger.info(f"  ✅ Found {len(emails)} emails on {path}")
                     return self._rank_emails(list(emails))
 
-            # ── PHASE 3: Selenium fallback for JS-rendered sites ─────────────
-            # Squarespace, Wix, Webflow, Shopify all render content via JS.
-            # requests only gets the bare HTML shell — the footer with the
-            # email address is injected by JS after page load.
-            # We reuse the existing Selenium driver (already open).
-            logger.debug(f"  🤖 Trying Selenium fallback (JS-rendered site)...")
-            emails = self._try_scrape_url_selenium(website_url)
-            if emails:
-                logger.info(f"  ✅ Found {len(emails)} emails via Selenium on homepage")
-                return self._rank_emails(list(emails))
-
-            # Also try /contact with Selenium
-            contact_url = urljoin(website_url, '/contact')
-            emails = self._try_scrape_url_selenium(contact_url)
-            if emails:
-                logger.info(f"  ✅ Found {len(emails)} emails via Selenium on /contact")
-                return self._rank_emails(list(emails))
-
-            logger.debug(f"  ❌ No emails found after all methods")
+            logger.debug(f"  ❌ No emails found on homepage or contact pages")
             return []
 
         except Exception as e:
             logger.error(f"  ❌ Error: {type(e).__name__} - {str(e)}")
             return []
-
-    def _try_scrape_url_selenium(self, url):
-        """
-        Scrape a URL using the existing Selenium driver.
-        Used as fallback for JS-rendered sites where requests gets empty HTML.
-        Reuses self.driver — no new browser opened.
-        """
-        emails = set()
-        try:
-            # Save current URL so we can go back to Google Maps after
-            current_url = self.driver.current_url
-
-            logger.debug(f"    🤖 Selenium loading: {url}")
-            self.driver.get(url)
-            time.sleep(3)  # Wait for JS to render
-
-            page_source = self.driver.page_source
-            emails = self._extract_emails_from_html(page_source)
-
-            # Go back to Google Maps
-            self.driver.get(current_url)
-            time.sleep(1)
-
-        except Exception as e:
-            logger.debug(f"    ❌ Selenium fallback error: {type(e).__name__}")
-            # Try to return to Google Maps even on error
-            try:
-                self.driver.back()
-            except:
-                pass
-
-        return emails
 
     def _try_scrape_url_requests_only(self, url):
         """Try to scrape a URL for emails using ONLY requests."""
@@ -629,32 +564,18 @@ class CarpentryLeadScraper:
         return email
 
     def _extract_emails_from_text(self, text):
-        """
-        Extract email addresses from text using regex.
-
-        Handles:
-        - Plain emails:          contact@company.com
-        - Labelled emails:       E: contact@company.com
-                                 Email: contact@company.com
-                                 email – contact@company.com
-        - Mixed case:            Gandfcustoms@gmail.com
-        """
+        """Extract email addresses from text using regex."""
         emails = set()
 
-        # ── Pattern 1: standard email anywhere in text ───────────────────────
-        # Requires first char to be a letter (blocks "5x@..." filenames).
-        pattern = r'\b([A-Za-z][A-Za-z0-9._%-]*@[A-Za-z0-9.-]+\.[A-Za-z]{2,})\b'
-        for match in re.findall(pattern, text, re.IGNORECASE):
-            cleaned = self._clean_email(match.lower())
-            if cleaned and self._is_valid_email(cleaned):
-                emails.add(cleaned)
+        # Requires a letter as the first character of the local part so that
+        # filenames like "5x-270x270.png" (no letter before @) don't match.
+        pattern = r'\b([A-Za-z][A-Za-z0-9._%-]*@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,})\b'
 
-        # ── Pattern 2: labelled emails — "E:", "Email:", "E –", etc. ─────────
-        # Catches "E: Gandfcustoms@gmail.com" where the label sits right before
-        # the address and might confuse word-boundary detection.
-        label_pattern = r'(?:e-?mail\s*[:\-–—]?\s*|e\s*[:\-–—]\s*)([A-Za-z0-9][A-Za-z0-9._%-]*@[A-Za-z0-9.-]+\.[A-Za-z]{2,})'
-        for match in re.findall(label_pattern, text, re.IGNORECASE):
-            cleaned = self._clean_email(match.lower())
+        matches = re.findall(pattern, text, re.IGNORECASE)
+
+        for email in matches:
+            email = email.lower()
+            cleaned = self._clean_email(email)
             if cleaned and self._is_valid_email(cleaned):
                 emails.add(cleaned)
 
