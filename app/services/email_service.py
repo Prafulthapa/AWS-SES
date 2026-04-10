@@ -1,129 +1,73 @@
-from dotenv import load_dotenv
-load_dotenv()
-import smtplib
-import imaplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from email.mime.image import MIMEImage
+"""
+Email Service - Amazon SES via boto3 SDK
+Replaces SMTP-based sending entirely.
+
+Why boto3 over SMTP:
+  - Direct AWS API call over HTTPS — never blocked by firewalls
+  - Richer error codes (MessageRejected, MailFromDomainNotVerified, etc.)
+  - Automatic retry/backoff handled by botocore
+  - No TCP connection management or timeout issues
+
+Required .env vars:
+  AWS_ACCESS_KEY_ID       — from IAM user ses-sender
+  AWS_SECRET_ACCESS_KEY   — from IAM user ses-sender
+  AWS_REGION              — e.g. us-east-1
+  FROM_EMAIL              — must be verified in SES
+  FROM_NAME               — display name
+  SES_CONFIGURATION_SET   — e.g. my-config-set (for bounce/complaint tracking)
+
+IMAP (inbound replies) is unchanged — still uses Hostinger/Google Workspace.
+"""
+
+import boto3
 import logging
 import os
-from typing import Optional, Dict
-from datetime import datetime
+import imaplib
 import time
-import socket
+import email as email_lib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from datetime import datetime
+from typing import Optional
+from botocore.exceptions import ClientError
 
 logger = logging.getLogger(__name__)
 
-# ============================================
-# Email configuration - Supports Gmail & Hostinger
-# ============================================
-SMTP_HOST = os.getenv("SMTP_HOST", "smtp.hostinger.com")
-SMTP_PORT = int(os.getenv("SMTP_PORT", "465"))
-SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "true").lower() == "true"
-SMTP_USE_SSL = os.getenv("SMTP_USE_SSL", "false").lower() == "true"
+# ─────────────────────────────────────────────────────────────────────────────
+# SES configuration — all from environment variables
+# ─────────────────────────────────────────────────────────────────────────────
+AWS_REGION            = os.getenv("AWS_REGION", "us-east-1")
+AWS_ACCESS_KEY_ID     = os.getenv("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
+FROM_EMAIL            = os.getenv("FROM_EMAIL")
+FROM_NAME             = os.getenv("FROM_NAME", "Advanced Autonomics")
+SES_CONFIGURATION_SET = os.getenv("SES_CONFIGURATION_SET", "my-config-set")
 
-SMTP_USER = os.getenv("SMTP_USERNAME")
-SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
-FROM_EMAIL = os.getenv("FROM_EMAIL", SMTP_USER)
-FROM_NAME = os.getenv("FROM_NAME", "Advanced Autonomics")
+# ─────────────────────────────────────────────────────────────────────────────
+# IMAP configuration — unchanged, still used for reading replies
+# ─────────────────────────────────────────────────────────────────────────────
+IMAP_HOST     = os.getenv("IMAP_HOST", "imap.gmail.com")
+IMAP_PORT     = int(os.getenv("IMAP_PORT", "993"))
+IMAP_USERNAME = os.getenv("IMAP_USERNAME")
+IMAP_PASSWORD = os.getenv("IMAP_PASSWORD")
 
-# IMAP configuration for saving to Sent folder
-IMAP_HOST = os.getenv("IMAP_HOST", "imap.hostinger.com")
-IMAP_PORT = int(os.getenv("IMAP_PORT", "993"))
-IMAP_USERNAME = os.getenv("IMAP_USERNAME", SMTP_USER)
-IMAP_PASSWORD = os.getenv("IMAP_PASSWORD", SMTP_PASSWORD)
-
-logger.info(f"📧 Email Service Config:")
-logger.info(f"   SMTP: {SMTP_HOST}:{SMTP_PORT} (TLS: {SMTP_USE_TLS}, SSL: {SMTP_USE_SSL})")
-logger.info(f"   IMAP: {IMAP_HOST}:{IMAP_PORT}")
+logger.info(f"📧 Email Service: boto3 → SES ({AWS_REGION})")
 logger.info(f"   From: {FROM_NAME} <{FROM_EMAIL}>")
+logger.info(f"   Config Set: {SES_CONFIGURATION_SET}")
+logger.info(f"   IMAP: {IMAP_HOST}:{IMAP_PORT}")
 
 
-# ============================================
-# 🔧 SAFETY CHECK — PREVENT INVALID SMTP CONFIG
-# ============================================
-
-if SMTP_USE_SSL and SMTP_PORT != 465:
-    raise ValueError(
-        "Invalid SMTP config: SMTP_USE_SSL=true requires SMTP_PORT=465"
+def _get_ses_client():
+    """Create and return a boto3 SES client."""
+    return boto3.client(
+        "ses",
+        region_name=AWS_REGION,
+        aws_access_key_id=AWS_ACCESS_KEY_ID,
+        aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
     )
 
-if SMTP_USE_TLS and SMTP_PORT != 587:
-    raise ValueError(
-        "Invalid SMTP config: SMTP_USE_TLS=true requires SMTP_PORT=587"
-    )
-
-if SMTP_USE_SSL and SMTP_USE_TLS:
-    raise ValueError(
-        "Invalid SMTP config: Cannot enable both SSL and TLS at the same time"
-    )
 
 class EmailService:
-
-    @staticmethod
-    def save_to_sent_folder(msg: MIMEMultipart) -> bool:
-        """
-        Save sent message to IMAP Sent folder.
-        Required for Hostinger since SMTP doesn't auto-save.
-        """
-        mail = None
-        try:
-            logger.info("💾 Saving to Sent folder via IMAP...")
-            
-            # Connect to IMAP with timeout
-            mail = imaplib.IMAP4_SSL(IMAP_HOST, IMAP_PORT)
-            mail.sock.settimeout(30)  # 30 second timeout
-            mail.login(IMAP_USERNAME, IMAP_PASSWORD)
-            
-            # Common Sent folder names (try in order)
-            sent_folders = ["Sent", "INBOX.Sent", "[Gmail]/Sent Mail", "Sent Messages"]
-            
-            # List available folders
-            status, folders = mail.list()
-            available = [f.decode().split('"')[-2] for f in folders] if status == "OK" else []
-            
-            # Find the Sent folder
-            sent_folder = None
-            for folder in sent_folders:
-                if folder in available:
-                    sent_folder = folder
-                    break
-            
-            if not sent_folder and available:
-                for folder in available:
-                    if "sent" in folder.lower():
-                        sent_folder = folder
-                        break
-            
-            if not sent_folder:
-                sent_folder = "INBOX"
-            
-            logger.info(f"📤 Saving to: {sent_folder}")
-            
-            # Add Date header if missing
-            if not msg.get("Date"):
-                msg["Date"] = datetime.utcnow().strftime("%a, %d %b %Y %H:%M:%S +0000")
-            
-            # Append message to Sent folder
-            mail.append(
-                sent_folder,
-                "\\Seen",
-                imaplib.Time2Internaldate(time.time()),
-                msg.as_bytes()
-            )
-            
-            logger.info("✅ Message saved to Sent folder")
-            return True
-            
-        except Exception as e:
-            logger.error(f"❌ Failed to save to Sent folder: {e}")
-            return False
-        finally:
-            if mail:
-                try:
-                    mail.logout()
-                except:
-                    pass
 
     @staticmethod
     def send_email(
@@ -132,173 +76,220 @@ class EmailService:
         body: str,
         to_name: Optional[str] = None,
         html_body: Optional[str] = None,
-        images: Optional[Dict[str, str]] = None,
+        images: Optional[dict] = None,   # kept for API compatibility, ignored by SES SDK
         attachments: Optional[list] = None,
         save_to_sent: bool = True
-    ) -> tuple[bool, Optional[str]]:
+    ) -> tuple:
         """
-        Send HTML email with embedded images via SMTP.
-        Uses fresh connection for each email (prevents timeout issues).
+        Send email via Amazon SES boto3 SDK.
+
+        Returns:
+            (success: bool, error_message: str | None)
         """
-        server = None
         try:
-            logger.info(f"📤 Preparing email to {to_email}")
+            # ── Build To address ─────────────────────────────────────────────
+            to_address = f"{to_name} <{to_email}>" if to_name else to_email
+            from_address = f"{FROM_NAME} <{FROM_EMAIL}>"
 
-            # Create message
-            msg = MIMEMultipart('related')
-            msg['Subject'] = subject
-            msg['From'] = f"{FROM_NAME} <{FROM_EMAIL}>"
-            msg['To'] = f"{to_name} <{to_email}>" if to_name else to_email
-            msg['Reply-To'] = FROM_EMAIL
-            msg['Date'] = datetime.utcnow().strftime("%a, %d %b %Y %H:%M:%S +0000")
+            logger.info(f"📤 Sending via SES to {to_email}")
 
-            # Create alternative container
-            msg_alternative = MIMEMultipart('alternative')
-            msg.attach(msg_alternative)
+            # ── Build message body ────────────────────────────────────────────
+            body_dict = {
+                "Text": {
+                    "Data": body,
+                    "Charset": "UTF-8",
+                }
+            }
 
-            # Add plain text
-            text_part = MIMEText(body, 'plain', 'utf-8')
-            msg_alternative.attach(text_part)
-
-            # Add HTML
             if html_body:
-                html_part = MIMEText(html_body, 'html', 'utf-8')
-                msg_alternative.attach(html_part)
+                body_dict["Html"] = {
+                    "Data": html_body,
+                    "Charset": "UTF-8",
+                }
 
-            # Embed images
-            if images:
-                for cid, image_path in images.items():
-                    if os.path.exists(image_path):
-                        try:
-                            with open(image_path, 'rb') as img_file:
-                                img_data = img_file.read()
-                                
-                                if image_path.lower().endswith('.png'):
-                                    img = MIMEImage(img_data, 'png')
-                                elif image_path.lower().endswith(('.jpg', '.jpeg')):
-                                    img = MIMEImage(img_data, 'jpeg')
-                                else:
-                                    img = MIMEImage(img_data)
-                                
-                                img.add_header('Content-ID', f'<{cid}>')
-                                img.add_header('Content-Disposition', 'inline', filename=os.path.basename(image_path))
-                                msg.attach(img)
-                        except Exception as e:
-                            logger.warning(f"⚠️ Failed to embed {cid}: {e}")
+            # ── Send via SES SDK ──────────────────────────────────────────────
+            ses = _get_ses_client()
 
-            # ============================================
-            # Send via SMTP - FRESH CONNECTION each time
-            # ============================================
-            
-            if SMTP_USE_SSL:
-                # SSL connection (Hostinger, port 465)
-                logger.info(f"🔐 Creating fresh SSL connection to {SMTP_HOST}:{SMTP_PORT}")
-                
-                # Create connection with explicit timeout
-                server = smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=30)
-                server.set_debuglevel(0)
-                
-                # Set socket timeout
-                if server.sock:
-                    server.sock.settimeout(30)
-                
-                # Login
-                if SMTP_USER and SMTP_PASSWORD:
-                    logger.info(f"🔑 Authenticating as {SMTP_USER}")
-                    server.login(SMTP_USER, SMTP_PASSWORD)
-                
-                # Send message
-                logger.info(f"📨 Sending message...")
-                server.send_message(msg)
-                logger.info(f"✅ SMTP send successful")
-                
-                # Explicitly close connection
-                server.quit()
-                server = None
-                    
-            elif SMTP_USE_TLS:
-                # TLS connection (Gmail, port 587)
-                logger.info(f"🔐 Creating fresh TLS connection to {SMTP_HOST}:{SMTP_PORT}")
-                
-                server = smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=30)
-                server.set_debuglevel(0)
-                
-                if server.sock:
-                    server.sock.settimeout(30)
-                
-                server.starttls()
-                
-                if SMTP_USER and SMTP_PASSWORD:
-                    server.login(SMTP_USER, SMTP_PASSWORD)
-                
-                server.send_message(msg)
-                logger.info(f"✅ SMTP send successful")
-                
-                server.quit()
-                server = None
-                
-            else:
-                # Plain SMTP
-                logger.warning("⚠️ Using plain SMTP (no encryption)")
-                server = smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=30)
-                
-                if SMTP_USER and SMTP_PASSWORD:
-                    server.login(SMTP_USER, SMTP_PASSWORD)
-                
-                server.send_message(msg)
-                server.quit()
-                server = None
+            send_kwargs = {
+                "Source": from_address,
+                "Destination": {
+                    "ToAddresses": [to_address],
+                },
+                "Message": {
+                    "Subject": {
+                        "Data": subject,
+                        "Charset": "UTF-8",
+                    },
+                    "Body": body_dict,
+                },
+                "ReplyToAddresses": [FROM_EMAIL],
+            }
 
-            # ============================================
-            # Save to Sent folder (separate connection)
-            # ============================================
+            # Attach configuration set if set — required for bounce/complaint tracking
+            if SES_CONFIGURATION_SET:
+                send_kwargs["ConfigurationSetName"] = SES_CONFIGURATION_SET
+
+            response = ses.send_email(**send_kwargs)
+
+            message_id = response.get("MessageId", "unknown")
+            logger.info(f"✅ SES accepted email — MessageId: {message_id}")
+
+            # ── Save to IMAP Sent folder ──────────────────────────────────────
             if save_to_sent and IMAP_HOST and IMAP_USERNAME:
-                # Small delay to ensure SMTP completed
-                time.sleep(1)
-                EmailService.save_to_sent_folder(msg)
+                try:
+                    EmailService._save_to_sent_folder(
+                        to_email=to_email,
+                        to_name=to_name,
+                        subject=subject,
+                        body=body,
+                        html_body=html_body,
+                        message_id=message_id,
+                    )
+                except Exception as e:
+                    # Non-fatal — email was already sent
+                    logger.warning(f"⚠️ Could not save to Sent folder: {e}")
 
-            logger.info(f"✅ Email successfully delivered to {to_email}")
             return True, None
 
-        except smtplib.SMTPAuthenticationError as e:
-            error_msg = f"Authentication failed: {str(e)}"
-            logger.error(f"❌ {error_msg}")
-            return False, error_msg
+        # ── SES-specific errors ───────────────────────────────────────────────
+        except ClientError as e:
+            code    = e.response["Error"]["Code"]
+            message = e.response["Error"]["Message"]
 
-        except smtplib.SMTPServerDisconnected as e:
-            error_msg = f"Server disconnected: {str(e)}"
-            logger.error(f"❌ {error_msg}")
-            return False, error_msg
+            # Map common SES error codes to clear messages
+            error_map = {
+                "MessageRejected":              "SES rejected message — check From address is verified",
+                "MailFromDomainNotVerified":    "Sending domain not verified in SES",
+                "ConfigurationSetDoesNotExist": f"SES config set '{SES_CONFIGURATION_SET}' not found",
+                "AccountSendingPausedException":"SES account sending is paused — check AWS console",
+                "SendingQuotaExceeded":         "SES daily sending quota exceeded",
+                "Throttling":                   "SES throttling — too many requests per second",
+            }
 
-        except socket.timeout as e:
-            error_msg = f"Connection timeout: {str(e)}"
-            logger.error(f"❌ {error_msg}")
-            return False, error_msg
-
-        except smtplib.SMTPException as e:
-            error_msg = f"SMTP error: {str(e)}"
-            logger.error(f"❌ {error_msg}")
-            return False, error_msg
+            friendly = error_map.get(code, f"SES error {code}: {message}")
+            logger.error(f"❌ SES ClientError: {friendly}")
+            return False, friendly
 
         except Exception as e:
             error_msg = f"Unexpected error: {str(e)}"
             logger.error(f"❌ {error_msg}", exc_info=True)
             return False, error_msg
-            
-        finally:
-            # Ensure connection is closed
-            if server:
-                try:
-                    server.quit()
-                except:
+
+    @staticmethod
+    def _save_to_sent_folder(
+        to_email: str,
+        to_name: Optional[str],
+        subject: str,
+        body: str,
+        html_body: Optional[str],
+        message_id: str,
+    ):
+        """
+        Save a copy of the sent email to the IMAP Sent folder.
+        Hostinger/Google Workspace doesn't auto-save SES outbound mail,
+        so we push a copy via IMAP APPEND.
+        """
+        mail = None
+        try:
+            # Build MIME message for IMAP storage
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = subject
+            msg["From"]    = f"{FROM_NAME} <{FROM_EMAIL}>"
+            msg["To"]      = f"{to_name} <{to_email}>" if to_name else to_email
+            msg["Date"]    = datetime.utcnow().strftime("%a, %d %b %Y %H:%M:%S +0000")
+            msg["Message-ID"] = f"<{message_id}@ses.amazonaws.com>"
+
+            msg.attach(MIMEText(body, "plain", "utf-8"))
+            if html_body:
+                msg.attach(MIMEText(html_body, "html", "utf-8"))
+
+            # Connect to IMAP
+            mail = imaplib.IMAP4_SSL(IMAP_HOST, IMAP_PORT)
+            mail.sock.settimeout(30)
+            mail.login(IMAP_USERNAME, IMAP_PASSWORD)
+
+            # Find Sent folder
+            sent_folders = ["Sent", "INBOX.Sent", "[Gmail]/Sent Mail", "Sent Messages"]
+            status, folders = mail.list()
+            available = []
+            if status == "OK":
+                for f in folders:
                     try:
-                        server.close()
+                        available.append(f.decode().split('"')[-2])
                     except:
                         pass
 
+            sent_folder = None
+            for candidate in sent_folders:
+                if candidate in available:
+                    sent_folder = candidate
+                    break
+
+            if not sent_folder:
+                for folder in available:
+                    if "sent" in folder.lower():
+                        sent_folder = folder
+                        break
+
+            if not sent_folder:
+                sent_folder = "INBOX"
+
+            # Append to Sent folder
+            mail.append(
+                sent_folder,
+                "\\Seen",
+                imaplib.Time2Internaldate(time.time()),
+                msg.as_bytes()
+            )
+            logger.info(f"💾 Saved to Sent folder: {sent_folder}")
+
+        except Exception as e:
+            logger.warning(f"⚠️ IMAP Sent folder save failed: {e}")
+        finally:
+            if mail:
+                try:
+                    mail.logout()
+                except:
+                    pass
+
     @staticmethod
     def generate_subject(lead_name: str, company: str) -> str:
-        """Generate subject line."""
+        """Generate subject line (unchanged)."""
         if company:
             return f"Pilot Opportunity: Autonomous Handling for {company}"
         return f"Automation Opportunity for {lead_name}"
+
+    @staticmethod
+    def test_connection() -> tuple:
+        """
+        Quick connectivity test — verify SES credentials and sending quota.
+        Call this on startup or from a health check endpoint.
+
+        Returns:
+            (success: bool, message: str)
+        """
+        try:
+            ses = _get_ses_client()
+            quota = ses.get_send_quota()
+
+            max24h   = quota.get("Max24HourSend", 0)
+            sent24h  = quota.get("SentLast24Hours", 0)
+            max_rate = quota.get("MaxSendRate", 0)
+
+            msg = (
+                f"SES connected ✅ | "
+                f"Sent last 24h: {int(sent24h)}/{int(max24h)} | "
+                f"Max rate: {max_rate}/sec"
+            )
+            logger.info(msg)
+            return True, msg
+
+        except ClientError as e:
+            msg = f"SES connection failed: {e.response['Error']['Code']}"
+            logger.error(msg)
+            return False, msg
+
+        except Exception as e:
+            msg = f"SES connection error: {str(e)}"
+            logger.error(msg)
+            return False, msg
