@@ -1,17 +1,21 @@
 {
   "completed_searches": [
-    "carpentry services|Toronto ON",
+    "carpentry|Toronto ON",
     "carpenter|Toronto ON",
-    "carpentry|Toronto ON"
+    "carpentry contractor|Toronto ON",
+    "cabinetmaker|Toronto ON",
+    "custom cabinets|Toronto ON",
+    "carpentry services|Toronto ON",
+    "cabinet maker|Toronto ON"
   ],
-  "current_search_index": 2,
+  "current_search_index": 6,
   "total_searches": 684,
-  "last_updated": "2026-04-10T10:00:27.971719",
-  "total_leads_collected": 40,
+  "last_updated": "2026-04-10T10:12:40.541785",
+  "total_leads_collected": 84,
   "active_session_file": "data/session_20260410_094709.json",
   "email_stats": {
-    "verified": 40,
-    "unverified": 25,
+    "verified": 84,
+    "unverified": 40,
     "none": 0
   }
 }
